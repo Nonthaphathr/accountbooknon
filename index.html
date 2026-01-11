@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Money Green - ระบบบันทึกรายรับรายจ่าย</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Kanit', 'sans-serif'] },
+                    colors: {
+                        primary: '#059669',     /* สีเขียวมรกตเข้ม */
+                        primaryLight: '#10b981', /* สีเขียวสว่าง */
+                        success: '#059669',
+                        danger: '#ef4444',
+                        bg: '#f0fdf4'
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f0fdf4;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        /* Custom Scrollbar */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Modal Transitions */
+        .modal-overlay {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-bottom {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .modal-overlay.active .modal-bottom {
+            transform: translateY(0);
+        }
+
+        /* Green Gradient Header */
+        .header-gradient {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            padding-top: env(safe-area-inset-top);
+        }
+
+        /* Developer Credit Text Styling */
+        .dev-credit {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
+
+    <header class="header-gradient text-white shadow-lg z-10 flex-none rounded-b-[2rem]">
+        <div class="p-4 pb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-2" onclick="openModal('accountModal')">
+                    <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs opacity-80 font-light">บัญชีปัจจุบัน</p>
+                        <h1 class="text-lg font-bold truncate max-w-[200px] flex items-center gap-2">
+                            <span id="currentAccountName">กำลังโหลด...</span>
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </h1>
+                    </div>
+                </div>
+                <button onclick="openModal('settingsModal')" class="w-10 h-10 bg-white/20 rounded-full hover:bg-white/30 transition flex items-center justify-center backdrop-blur-sm">
+                    <i class="fa-solid fa-cog"></i>
+                </button>
+            </div>
+
+            <div class="flex gap-2 overflow-x-auto hide-scroll pb-1" id="subAccountList">
+                </div>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-32 relative" id="mainContent">
+        
+        <div class="bg-white p-5 rounded-3xl shadow-lg shadow-green-900/5 border border-green-50 text-center mb-6 -mt-2 relative z-10">
+            <p class="text-slate-500 text-sm mb-1 font-medium">ยอดคงเหลือสุทธิ</p>
+            <h2 class="text-4xl font-bold text-primary mb-4" id="totalBalance">฿0.00</h2>
+            
+            <div class="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+                <div class="text-left pl-2 border-r border-slate-100">
+                    <div class="flex items-center gap-2 mb-1">
+                        <div class="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-primary text-xs">
+                            <i class="fa-solid fa-arrow-down"></i>
+                        </div>
+                        <span class="text-xs text-slate-400">รายรับ</span>
+                    </div>
+                    <p class="font-bold text-lg text-primary" id="totalIncome">฿0.00</p>
+                </div>
+                <div class="text-left pl-4">
+                    <div class="flex items-center gap-2 mb-1">
+                        <div class="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-danger text-xs">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </div>
+                        <span class="text-xs text-slate-400">รายจ่าย</span>
+                    </div>
+                    <p class="font-bold text-lg text-danger" id="totalExpense">฿0.00</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-primary"></i> ภาพรวม
+                </h3>
+                <div class="bg-slate-100 p-1 rounded-full flex text-xs font-medium">
+                    <button onclick="switchChart('pie')" id="btnChartPie" class="px-3 py-1 rounded-full bg-white shadow-sm text-primary transition">สัดส่วน</button>
+                    <button onclick="switchChart('bar')" id="btnChartBar" class="px-3 py-1 rounded-full text-slate-500 hover:text-slate-700 transition">จัดอันดับ</button>
+                </div>
+            </div>
+            <div class="relative h-56 w-full">
+                <canvas id="financeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="mb-4 flex justify-between items-center px-1">
+            <h3 class="font-bold text-slate-700 text-lg">รายการล่าสุด</h3>
+            <button onclick="toggleFilter()" class="text-primary text-sm font-medium flex items-center gap-1 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100">
+                <i class="fa-solid fa-filter"></i> ตัวกรอง
+            </button>
+        </div>
+
+        <div id="filterPanel" class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-4 animate-fade-in">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="text-xs text-slate-500 block mb-1">เริ่ม</label>
+                    <input type="date" id="filterStartDate" class="w-full text-sm p-2 bg-slate-50 rounded-xl border-0 focus:ring-2 focus:ring-primary text-primary">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 block mb-1">ถึง</label>
+                    <input type="date" id="filterEndDate" class="w-full text-sm p-2 bg-slate-50 rounded-xl border-0 focus:ring-2 focus:ring-primary text-primary">
+                </div>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-2 hide-scroll">
+                <button onclick="setFilterType('all')" class="filter-type-btn active px-4 py-1.5 rounded-full text-xs border border-primary bg-primary text-white shadow-sm shadow-green-200 whitespace-nowrap" data-type="all">ทั้งหมด</button>
+                <button onclick="setFilterType('income')" class="filter-type-btn px-4 py-1.5 rounded-full text-xs border border-slate-200 bg-white text-slate-600 whitespace-nowrap" data-type="income">รายรับ</button>
+                <button onclick="setFilterType('expense')" class="filter-type-btn px-4 py-1.5 rounded-full text-xs border border-slate-200 bg-white text-slate-600 whitespace-nowrap" data-type="expense">รายจ่าย</button>
+            </div>
+        </div>
+
+        <div id="transactionList" class="space-y-3">
+            </div>
+
+        <div class="dev-credit">
+            <i class="fa-solid fa-code mb-1"></i><br>
+            พัฒนาโดย <span class="font-semibold text-emerald-600">นายนนทพัทธ์ หิรัญเรือง</span>
+        </div>
+
+    </main>
+
+    <button onclick="openTransactionModal()" class="fixed bottom-8 right-6 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full shadow-lg shadow-emerald-500/40 flex items-center gap-2 px-5 py-3.5 hover:scale-105 active:scale-95 transition-all duration-300 z-20 ring-4 ring-white/50 backdrop-blur-sm animate-bounce-slow">
+        <i class="fa-solid fa-plus text-xl"></i>
+        <span class="font-bold text-sm">เพิ่มรายการ</span>
+    </button>
+
+    <div id="accountModal" class="modal-overlay fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-center">
+        <div class="modal-bottom bg-white w-full sm:w-[400px] sm:rounded-3xl rounded-t-3xl max-h-[80vh] flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-xl text-slate-800">เลือกบัญชีหลัก</h3>
+                <button onclick="closeModal('accountModal')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="accountListContainer" class="space-y-3 mb-6"></div>
+                <button onclick="openAddAccountView()" class="w-full py-4 border-2 border-dashed border-emerald-200 text-emerald-600 bg-emerald-50 rounded-2xl hover:bg-emerald-100 transition flex items-center justify-center gap-2 font-bold">
+                    <i class="fa-solid fa-plus"></i> สร้างบัญชีใหม่
+                </button>
+            </div>
+            <div id="addAccountView" class="hidden absolute inset-0 bg-white flex flex-col z-10 rounded-t-3xl">
+                <div class="p-6 border-b flex items-center gap-3">
+                    <button onclick="closeAddAccountView()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h3 class="font-bold text-xl">สร้างบัญชีใหม่</h3>
+                </div>
+                <div class="p-6">
+                    <label class="block text-sm font-medium mb-2 text-slate-600">ชื่อบัญชี</label>
+                    <input type="text" id="newAccountName" class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 mb-6 focus:ring-2 focus:ring-primary focus:border-primary outline-none text-lg" placeholder="เช่น กระเป๋าตังค์, บัญชีธนาคาร">
+                    <button onclick="createAccount()" class="w-full bg-primary text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200">บันทึกบัญชี</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="modal-overlay fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-center">
+        <div class="modal-bottom bg-white w-full sm:w-[400px] sm:rounded-3xl rounded-t-3xl max-h-[85vh] flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-xl">จัดการบัญชีย่อย</h3>
+                <button onclick="closeModal('settingsModal')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="bg-slate-50 p-3 rounded-xl mb-4 text-center">
+                    <p class="text-sm text-slate-500">กำลังจัดการบัญชี:</p>
+                    <p id="settingAccountName" class="text-primary font-bold text-lg"></p>
+                </div>
+                
+                <div id="manageSubAccountList" class="space-y-3 mb-6"></div>
+                
+                <h4 class="font-bold text-sm text-slate-700 mb-3">เพิ่มบัญชีย่อยใหม่</h4>
+                <div class="flex gap-2 mb-8">
+                    <input type="text" id="newSubAccountName" class="flex-1 p-3 bg-white rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="ชื่อบัญชีย่อย (เช่น KBank)">
+                    <button onclick="createSubAccount()" class="bg-primary text-white px-5 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-700">เพิ่ม</button>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100">
+                    <button onclick="deleteCurrentAccount()" class="w-full py-3 text-danger bg-red-50 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition">
+                        <i class="fa-solid fa-trash-can"></i> ลบบัญชีหลักนี้ถาวร
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="transactionModal" class="modal-overlay fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-center">
+        <div class="modal-bottom bg-white w-full sm:w-[400px] sm:rounded-3xl rounded-t-3xl max-h-[95vh] flex flex-col">
+            <div class="p-5 header-gradient text-white rounded-t-3xl flex justify-between items-center shadow-md z-10">
+                <h3 class="font-bold text-xl flex items-center gap-2" id="txModalTitle">
+                    <i class="fa-solid fa-pen-to-square"></i> บันทึกรายการ
+                </h3>
+                <button onclick="closeModal('transactionModal')" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 backdrop-blur-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto flex-1">
+                <input type="hidden" id="txId">
+                
+                <div class="flex bg-slate-100 p-1.5 rounded-2xl mb-6">
+                    <button type="button" onclick="setTxType('expense')" id="btnTypeExpense" class="flex-1 py-3 rounded-xl text-sm font-bold transition text-danger bg-white shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-minus-circle"></i> รายจ่าย</button>
+                    <button type="button" onclick="setTxType('income')" id="btnTypeIncome" class="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500 transition flex items-center justify-center gap-2"><i class="fa-solid fa-plus-circle"></i> รายรับ</button>
+                </div>
+
+                <div class="mb-6 relative">
+                    <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">จำนวนเงิน (บาท)</label>
+                    <input type="number" id="txAmount" class="w-full text-4xl font-bold text-slate-800 border-0 border-b-2 border-slate-200 focus:border-primary focus:ring-0 px-2 py-2 bg-transparent placeholder-slate-300" placeholder="0.00">
+                    <span class="absolute right-2 bottom-4 text-slate-400 font-light">THB</span>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-slate-400 mb-2 ml-1">กระเป๋า/บัญชี</label>
+                    <select id="txSubAccount" class="w-full p-4 bg-slate-50 rounded-2xl border-0 focus:ring-2 focus:ring-primary font-medium text-slate-700 appearance-none">
+                        </select>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-slate-400 mb-2 ml-1">หมวดหมู่</label>
+                    <div id="categoryContainer" class="grid grid-cols-4 gap-2">
+                        </div>
+                    <input type="hidden" id="txCategory">
+                </div>
+
+                <div class="space-y-4 mb-6">
+                    <div class="flex items-center bg-slate-50 rounded-2xl p-2 border border-slate-100">
+                        <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 shadow-sm"><i class="fa-regular fa-calendar"></i></div>
+                        <input type="date" id="txDate" class="flex-1 bg-transparent border-0 text-sm font-medium focus:ring-0 text-slate-700">
+                    </div>
+                    <div class="flex items-center bg-slate-50 rounded-2xl p-2 border border-slate-100">
+                        <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 shadow-sm"><i class="fa-regular fa-comment-dots"></i></div>
+                        <input type="text" id="txDesc" class="flex-1 bg-transparent border-0 text-sm font-medium focus:ring-0 text-slate-700" placeholder="บันทึกเพิ่มเติม...">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-4 mb-2">
+                    <button type="button" id="btnDeleteTx" onclick="deleteTransaction()" class="hidden w-14 bg-red-50 text-danger rounded-2xl flex items-center justify-center hover:bg-red-100"><i class="fa-solid fa-trash-can text-lg"></i></button>
+                    <button onclick="saveTransaction()" class="flex-1 bg-primary text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition">บันทึกรายการ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, where, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // 1. Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCLQAJQi-eNcxSDwnmbDib5v3hkr2lXnUY",
+            authDomain: "accountbook-12a55.firebaseapp.com",
+            projectId: "accountbook-12a55",
+            storageBucket: "accountbook-12a55.firebasestorage.app",
+            messagingSenderId: "1001925697978",
+            appId: "1:1001925697978:web:8fff14b06f2ed1cd377d83"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 2. State Management
+        let currentState = {
+            accountId: localStorage.getItem('lastAccountId') || null,
+            subAccountId: localStorage.getItem('lastSubAccountId') || 'all',
+            accounts: [],
+            subAccounts: [],
+            transactions: [],
+            filter: { start: '', end: '', type: 'all' },
+            chartType: 'pie'
+        };
+
+        let unsubTransactions = null;
+        let unsubSubAccounts = null;
+        let chartInstance = null;
+
+        // Constants
+        const CAT_EXPENSE = ['อาหาร', 'ค่าเดินทาง', 'บ้าน', 'ช้อปปิ้ง', 'สุขภาพ', 'บันเทิง', 'การศึกษา', 'อื่นๆ'];
+        const CAT_INCOME = ['เงินเดือน', 'ธุรกิจ', 'ลงทุน', 'อื่นๆ'];
+        const ICONS = {
+            'อาหาร': 'fa-utensils', 'ค่าเดินทาง': 'fa-bus', 'บ้าน': 'fa-house', 'ช้อปปิ้ง': 'fa-bag-shopping',
+            'สุขภาพ': 'fa-heart-pulse', 'บันเทิง': 'fa-gamepad', 'การศึกษา': 'fa-graduation-cap', 'อื่นๆ': 'fa-money-bill',
+            'รายจ่ายอื่นๆ': 'fa-money-bill', 'เงินเดือน': 'fa-sack-dollar', 'ธุรกิจ': 'fa-shop', 'ธุรกิจส่วนตัว': 'fa-shop', 
+            'ลงทุน': 'fa-chart-line', 'เงินลงทุน': 'fa-chart-line', 'รายรับอื่นๆ': 'fa-coins'
+        };
+
+        // 3. Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+            setupEventListeners();
+        });
+
+        function initApp() {
+            onSnapshot(collection(db, "accounts"), (snapshot) => {
+                currentState.accounts = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                renderAccountModalList();
+                
+                if (!currentState.accountId && currentState.accounts.length > 0) {
+                    switchAccount(currentState.accounts[0].id);
+                } else if (currentState.accountId) {
+                    const exists = currentState.accounts.find(a => a.id === currentState.accountId);
+                    if (exists) {
+                        switchAccount(currentState.accountId);
+                    } else if (currentState.accounts.length > 0) {
+                        switchAccount(currentState.accounts[0].id);
+                    } else {
+                        showEmptyState();
+                    }
+                } else {
+                    showEmptyState();
+                }
+            });
+
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            
+            document.getElementById('filterStartDate').value = formatDateInput(firstDay);
+            document.getElementById('filterEndDate').value = formatDateInput(lastDay);
+            document.getElementById('txDate').value = formatDateInput(today);
+        }
+
+        // 4. Data Logic
+        function switchAccount(accountId) {
+            currentState.accountId = accountId;
+            localStorage.setItem('lastAccountId', accountId);
+            
+            const acc = currentState.accounts.find(a => a.id === accountId);
+            document.getElementById('currentAccountName').innerText = acc ? acc.name : 'เลือกบัญชี';
+            document.getElementById('settingAccountName').innerText = acc ? acc.name : '';
+
+            if (unsubSubAccounts) unsubSubAccounts();
+            if (unsubTransactions) unsubTransactions();
+
+            const qSub = query(collection(db, "subAccounts"), where("accountId", "==", accountId));
+            unsubSubAccounts = onSnapshot(qSub, (snapshot) => {
+                currentState.subAccounts = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                renderSubAccountSelector();
+                renderManageSubAccounts();
+                
+                if (currentState.subAccountId !== 'all' && !currentState.subAccounts.find(s => s.id === currentState.subAccountId)) {
+                    currentState.subAccountId = 'all';
+                }
+                updateActiveSubAccountUI();
+            });
+
+            const qTx = query(collection(db, "transactions"), where("accountId", "==", accountId));
+            unsubTransactions = onSnapshot(qTx, (snapshot) => {
+                currentState.transactions = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                currentState.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                processDataAndUpdateUI();
+            });
+        }
+
+        function switchSubAccount(subId) {
+            currentState.subAccountId = subId;
+            localStorage.setItem('lastSubAccountId', subId);
+            updateActiveSubAccountUI();
+            processDataAndUpdateUI();
+        }
+
+        function processDataAndUpdateUI() {
+            let filteredTx = currentState.transactions;
+            if (currentState.subAccountId !== 'all') {
+                filteredTx = filteredTx.filter(t => t.subAccountId === currentState.subAccountId);
+            }
+
+            const start = document.getElementById('filterStartDate').value;
+            const end = document.getElementById('filterEndDate').value;
+            const type = currentState.filter.type;
+
+            const listData = filteredTx.filter(t => {
+                const d = t.date;
+                const matchDate = (!start || d >= start) && (!end || d <= end);
+                const matchType = type === 'all' || t.type === type;
+                return matchDate && matchType;
+            });
+
+            renderTransactions(listData);
+            updateSummary(listData);
+            updateChart(listData);
+        }
+
+        // 5. Rendering
+        function renderSubAccountSelector() {
+            const container = document.getElementById('subAccountList');
+            let html = `<button onclick="window.switchSubAccount('all')" id="sub-btn-all" class="whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-medium border border-white/40 bg-white/20 text-white transition hover:bg-white/30 backdrop-blur-sm">ทั้งหมด</button>`;
+            
+            currentState.subAccounts.forEach(sub => {
+                html += `<button onclick="window.switchSubAccount('${sub.id}')" id="sub-btn-${sub.id}" class="whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-medium border border-white/40 bg-transparent text-white transition hover:bg-white/10 backdrop-blur-sm">${sub.name}</button>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function updateActiveSubAccountUI() {
+            document.querySelectorAll('#subAccountList button').forEach(btn => {
+                btn.className = "whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-medium border border-white/40 bg-transparent text-white transition hover:bg-white/10 backdrop-blur-sm";
+            });
+            
+            const activeId = currentState.subAccountId === 'all' ? 'sub-btn-all' : `sub-btn-${currentState.subAccountId}`;
+            const activeBtn = document.getElementById(activeId);
+            if (activeBtn) {
+                activeBtn.className = "whitespace-nowrap px-5 py-1.5 rounded-full text-xs font-bold border-2 border-white bg-white text-primary shadow-lg transform scale-105 transition";
+                activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }
+
+        function renderTransactions(txs) {
+            const container = document.getElementById('transactionList');
+            if (txs.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 opacity-50"><i class="fa-solid fa-leaf text-4xl mb-3 text-green-200"></i><p class="text-slate-400">ไม่มีรายการในช่วงนี้</p></div>`;
+                return;
+            }
+
+            let html = '';
+            txs.forEach(t => {
+                const subAccName = currentState.subAccounts.find(s => s.id === t.subAccountId)?.name || 'Unknown';
+                const isExp = t.type === 'expense';
+                const colorClass = isExp ? 'text-danger' : 'text-primary';
+                const sign = isExp ? '-' : '+';
+                const icon = ICONS[t.category] || ICONS[t.category.split(' ')[0]] || 'fa-circle';
+
+                html += `
+                <div onclick="editTransaction('${t.id}')" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-50 flex items-center justify-between active:scale-[0.98] transition cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full ${isExp ? 'bg-red-50 text-danger' : 'bg-green-50 text-primary'} flex items-center justify-center text-xl shadow-inner">
+                            <i class="fa-solid ${icon}"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-700 text-sm">${t.category}</p>
+                            <p class="text-xs text-slate-400 flex items-center gap-1">
+                                <span class="bg-slate-100 px-1.5 rounded text-[10px]">${subAccName}</span>
+                                ${formatDateDisplay(t.date)}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold ${colorClass} text-lg">${sign}${formatNumber(t.amount)}</p>
+                        ${t.description ? `<p class="text-[10px] text-slate-400 max-w-[100px] truncate ml-auto">${t.description}</p>` : ''}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function updateSummary(txs) {
+            let inc = 0, exp = 0;
+            txs.forEach(t => {
+                if (t.type === 'income') inc += Number(t.amount);
+                else exp += Number(t.amount);
+            });
+            
+            document.getElementById('totalIncome').innerText = `฿${formatNumber(inc)}`;
+            document.getElementById('totalExpense').innerText = `฿${formatNumber(exp)}`;
+            document.getElementById('totalBalance').innerText = `฿${formatNumber(inc - exp)}`;
+        }
+
+        function updateChart(txs) {
+            const ctx = document.getElementById('financeChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            if (currentState.chartType === 'pie') {
+                let inc = 0, exp = 0;
+                txs.forEach(t => {
+                    if (t.type === 'income') inc += Number(t.amount);
+                    else exp += Number(t.amount);
+                });
+
+                chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['รายรับ', 'รายจ่าย'],
+                        datasets: [{
+                            data: [inc, exp],
+                            backgroundColor: ['#10b981', '#ef4444'],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right' } } }
+                });
+            } else {
+                const expenses = txs.filter(t => t.type === 'expense');
+                const catSum = {};
+                expenses.forEach(t => {
+                    catSum[t.category] = (catSum[t.category] || 0) + Number(t.amount);
+                });
+                const sortedCats = Object.entries(catSum).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedCats.map(x => x[0]),
+                        datasets: [{
+                            label: 'บาท',
+                            data: sortedCats.map(x => x[1]),
+                            backgroundColor: '#059669',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { display: false }, x: { grid: { display: false } } }
+                    }
+                });
+            }
+        }
+
+        // 6. Modal Functions
+        window.openTransactionModal = () => {
+            if (!currentState.accountId) return alert('กรุณาสร้างบัญชีหลักก่อน');
+            if (currentState.subAccounts.length === 0) return alert('กรุณาสร้างบัญชีย่อยก่อน');
+
+            document.getElementById('txId').value = '';
+            document.getElementById('txModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> เพิ่มรายการใหม่';
+            document.getElementById('txAmount').value = '';
+            document.getElementById('txDesc').value = '';
+            document.getElementById('txDate').value = formatDateInput(new Date());
+            document.getElementById('btnDeleteTx').classList.add('hidden');
+            
+            const select = document.getElementById('txSubAccount');
+            select.innerHTML = '';
+            currentState.subAccounts.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub.id;
+                opt.innerText = sub.name;
+                select.appendChild(opt);
+            });
+            if (currentState.subAccountId !== 'all') select.value = currentState.subAccountId;
+
+            setTxType('expense');
+            openModal('transactionModal');
+        };
+
+        window.editTransaction = (id) => {
+            const tx = currentState.transactions.find(t => t.id === id);
+            if (!tx) return;
+
+            document.getElementById('txId').value = tx.id;
+            document.getElementById('txModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> แก้ไขรายการ';
+            document.getElementById('txAmount').value = tx.amount;
+            document.getElementById('txDesc').value = tx.description;
+            document.getElementById('txDate').value = tx.date;
+            document.getElementById('btnDeleteTx').classList.remove('hidden');
+
+            const select = document.getElementById('txSubAccount');
+            select.innerHTML = '';
+            currentState.subAccounts.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub.id;
+                opt.innerText = sub.name;
+                if (sub.id === tx.subAccountId) opt.selected = true;
+                select.appendChild(opt);
+            });
+
+            setTxType(tx.type, tx.category);
+            openModal('transactionModal');
+        };
+
+        window.setTxType = (type, preSelectedCat = null) => {
+            const btnInc = document.getElementById('btnTypeIncome');
+            const btnExp = document.getElementById('btnTypeExpense');
+            
+            if (type === 'income') {
+                btnInc.className = "flex-1 py-3 rounded-xl text-sm font-bold transition text-primary bg-white shadow-sm flex items-center justify-center gap-2 border border-slate-100";
+                btnExp.className = "flex-1 py-3 rounded-xl text-sm font-bold text-slate-400 transition flex items-center justify-center gap-2";
+                renderCategories(CAT_INCOME, preSelectedCat || CAT_INCOME[0]);
+            } else {
+                btnExp.className = "flex-1 py-3 rounded-xl text-sm font-bold transition text-danger bg-white shadow-sm flex items-center justify-center gap-2 border border-slate-100";
+                btnInc.className = "flex-1 py-3 rounded-xl text-sm font-bold text-slate-400 transition flex items-center justify-center gap-2";
+                renderCategories(CAT_EXPENSE, preSelectedCat || CAT_EXPENSE[0]);
+            }
+        };
+
+        function renderCategories(cats, selected) {
+            const container = document.getElementById('categoryContainer');
+            document.getElementById('txCategory').value = selected;
+            let html = '';
+            cats.forEach(c => {
+                const isActive = c === selected;
+                const activeClass = isActive ? 'border-primary bg-emerald-50 text-primary shadow-sm' : 'border-slate-100 bg-white text-slate-500 hover:border-emerald-200';
+                const icon = ICONS[c] || 'fa-circle';
+                html += `<div onclick="selectCategory('${c}')" class="category-chip cursor-pointer border rounded-2xl p-2 flex flex-col items-center justify-center gap-1 transition h-20 ${activeClass}">
+                    <i class="fa-solid ${icon} text-lg mb-1"></i>
+                    <span class="text-[10px] font-medium text-center leading-tight">${c}</span>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        window.selectCategory = (cat) => {
+            document.getElementById('txCategory').value = cat;
+            const type = document.getElementById('btnTypeIncome').classList.contains('text-primary') ? 'income' : 'expense';
+            renderCategories(type === 'income' ? CAT_INCOME : CAT_EXPENSE, cat);
+        };
+
+        window.saveTransaction = async () => {
+            const id = document.getElementById('txId').value;
+            const subId = document.getElementById('txSubAccount').value;
+            const amount = parseFloat(document.getElementById('txAmount').value);
+            const type = document.getElementById('btnTypeIncome').classList.contains('text-primary') ? 'income' : 'expense';
+            const category = document.getElementById('txCategory').value;
+            const date = document.getElementById('txDate').value;
+            const desc = document.getElementById('txDesc').value;
+
+            if (!subId || isNaN(amount) || !date) return alert('กรุณากรอกข้อมูลให้ครบ');
+
+            const data = { accountId: currentState.accountId, subAccountId: subId, type, amount, category, date, description: desc, updatedAt: serverTimestamp() };
+
+            try {
+                if (id) await updateDoc(doc(db, "transactions", id), data);
+                else { data.createdAt = serverTimestamp(); await addDoc(collection(db, "transactions"), data); }
+                closeModal('transactionModal');
+            } catch (e) { alert('เกิดข้อผิดพลาด'); }
+        };
+
+        window.deleteTransaction = async () => {
+            const id = document.getElementById('txId').value;
+            if (id && confirm('ลบรายการนี้?')) {
+                await deleteDoc(doc(db, "transactions", id));
+                closeModal('transactionModal');
+            }
+        };
+
+        window.createAccount = async () => {
+            const name = document.getElementById('newAccountName').value.trim();
+            if (name) {
+                const ref = await addDoc(collection(db, "accounts"), { name, createdAt: serverTimestamp() });
+                await addDoc(collection(db, "subAccounts"), { accountId: ref.id, name: "เงินสด", createdAt: serverTimestamp() });
+                document.getElementById('newAccountName').value = '';
+                closeAddAccountView();
+                switchAccount(ref.id);
+                closeModal('accountModal');
+            }
+        };
+
+        window.createSubAccount = async () => {
+            const name = document.getElementById('newSubAccountName').value.trim();
+            if (name) {
+                await addDoc(collection(db, "subAccounts"), { accountId: currentState.accountId, name, createdAt: serverTimestamp() });
+                document.getElementById('newSubAccountName').value = '';
+            }
+        };
+
+        window.deleteSubAccount = async (id) => {
+            if (confirm('ลบบัญชีย่อยนี้?')) {
+                const snap = await getDocs(query(collection(db, "transactions"), where("subAccountId", "==", id)));
+                const batch = writeBatch(db);
+                snap.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+                await deleteDoc(doc(db, "subAccounts", id));
+                if (currentState.subAccountId === id) switchSubAccount('all');
+            }
+        };
+        
+        window.deleteCurrentAccount = async () => {
+            if (confirm('ยืนยันลบบัญชีหลักและข้อมูลทั้งหมด?')) {
+                const accId = currentState.accountId;
+                const subSnap = await getDocs(query(collection(db, "subAccounts"), where("accountId", "==", accId)));
+                subSnap.forEach(d => deleteDoc(d.ref));
+                const txSnap = await getDocs(query(collection(db, "transactions"), where("accountId", "==", accId)));
+                const batch = writeBatch(db);
+                txSnap.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+                await deleteDoc(doc(db, "accounts", accId));
+                localStorage.removeItem('lastAccountId');
+                location.reload();
+            }
+        };
+
+        // Helpers
+        function renderAccountModalList() {
+            const container = document.getElementById('accountListContainer');
+            let html = '';
+            currentState.accounts.forEach(a => {
+                const isActive = a.id === currentState.accountId;
+                html += `<div onclick="switchAccount('${a.id}'); closeModal('accountModal')" class="p-4 rounded-2xl border ${isActive ? 'border-primary bg-emerald-50 text-primary' : 'border-slate-100'} flex justify-between items-center cursor-pointer hover:bg-slate-50">
+                    <span class="font-bold">${a.name}</span>
+                    ${isActive ? '<i class="fa-solid fa-check-circle text-xl"></i>' : ''}
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderManageSubAccounts() {
+            const container = document.getElementById('manageSubAccountList');
+            let html = '';
+            currentState.subAccounts.forEach(s => {
+                html += `<div class="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white mb-2">
+                    <span class="font-medium text-slate-700">${s.name}</span>
+                    <button onclick="deleteSubAccount('${s.id}')" class="text-slate-300 hover:text-danger w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-trash-can"></i></button>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        window.toggleFilter = () => document.getElementById('filterPanel').classList.toggle('hidden');
+        
+        window.setFilterType = (type) => {
+            currentState.filter.type = type;
+            document.querySelectorAll('.filter-type-btn').forEach(b => {
+                if (b.dataset.type === type) {
+                    b.className = "filter-type-btn active px-4 py-1.5 rounded-full text-xs border border-primary bg-primary text-white shadow-sm shadow-green-200 whitespace-nowrap";
+                } else {
+                    b.className = "filter-type-btn px-4 py-1.5 rounded-full text-xs border border-slate-200 bg-white text-slate-600 whitespace-nowrap";
+                }
+            });
+            processDataAndUpdateUI();
+        };
+
+        window.switchChart = (type) => {
+            currentState.chartType = type;
+            document.getElementById('btnChartPie').className = type === 'pie' ? 'px-3 py-1 rounded-full bg-white shadow-sm text-primary transition' : 'px-3 py-1 rounded-full text-slate-500 hover:text-slate-700 transition';
+            document.getElementById('btnChartBar').className = type === 'bar' ? 'px-3 py-1 rounded-full bg-white shadow-sm text-primary transition' : 'px-3 py-1 rounded-full text-slate-500 hover:text-slate-700 transition';
+            processDataAndUpdateUI();
+        };
+
+        window.openModal = (id) => document.getElementById(id).classList.add('active');
+        window.closeModal = (id) => document.getElementById(id).classList.remove('active');
+        window.openAddAccountView = () => document.getElementById('addAccountView').classList.remove('hidden');
+        window.closeAddAccountView = () => document.getElementById('addAccountView').classList.add('hidden');
+
+        function formatDateDisplay(dateStr) {
+            return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        }
+        function formatDateInput(date) { return date.toISOString().split('T')[0]; }
+        function formatNumber(num) { return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+        
+        function showEmptyState() {
+            document.getElementById('currentAccountName').innerText = 'เริ่มใช้งาน';
+            document.getElementById('subAccountList').innerHTML = '';
+            document.getElementById('transactionList').innerHTML = '<div class="flex flex-col items-center justify-center h-64 text-center"><div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-wallet text-3xl text-primary"></i></div><h3 class="font-bold text-lg mb-2">ยินดีต้อนรับ!</h3><p class="text-slate-500 mb-6 text-sm">สร้างสมุดบัญชีเล่มแรกเพื่อเริ่มบันทึก</p><button onclick="openModal(\'accountModal\'); openAddAccountView()" class="bg-primary text-white px-8 py-3 rounded-full font-bold shadow-lg shadow-emerald-200">สร้างบัญชีใหม่</button></div>';
+        }
+
+        window.switchSubAccount = switchSubAccount;
+        window.switchAccount = switchAccount;
+
+        function setupEventListeners() {
+             document.querySelectorAll('.modal-overlay').forEach(el => {
+                 el.addEventListener('click', (e) => { if (e.target === el) el.classList.remove('active'); });
+             });
+             document.getElementById('filterStartDate').addEventListener('change', processDataAndUpdateUI);
+             document.getElementById('filterEndDate').addEventListener('change', processDataAndUpdateUI);
+        }
+    </script>
+</body>
+</html>
