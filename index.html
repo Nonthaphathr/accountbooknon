@@ -104,7 +104,7 @@
             </div>
 
             <div class="flex gap-2 overflow-x-auto hide-scroll pb-1" id="subAccountList">
-                </div>
+            </div>
         </div>
     </header>
 
@@ -152,7 +152,7 @@
         </div>
 
         <div class="mb-4 flex justify-between items-center px-1">
-            <h3 class="font-bold text-slate-700 text-lg">รายการล่าสุด</h3>
+            <h3 class="font-bold text-slate-700 text-lg">รายการทั้งหมด</h3>
             <button onclick="toggleFilter()" class="text-primary text-sm font-medium flex items-center gap-1 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100">
                 <i class="fa-solid fa-filter"></i> ตัวกรอง
             </button>
@@ -177,7 +177,7 @@
         </div>
 
         <div id="transactionList" class="space-y-3">
-            </div>
+        </div>
 
         <div class="dev-credit">
             <i class="fa-solid fa-code mb-1"></i><br>
@@ -271,13 +271,13 @@
                 <div class="mb-6">
                     <label class="block text-xs font-bold text-slate-400 mb-2 ml-1">กระเป๋า/บัญชี</label>
                     <select id="txSubAccount" class="w-full p-4 bg-slate-50 rounded-2xl border-0 focus:ring-2 focus:ring-primary font-medium text-slate-700 appearance-none">
-                        </select>
+                    </select>
                 </div>
 
                 <div class="mb-6">
                     <label class="block text-xs font-bold text-slate-400 mb-2 ml-1">หมวดหมู่</label>
                     <div id="categoryContainer" class="grid grid-cols-4 gap-2">
-                        </div>
+                    </div>
                     <input type="hidden" id="txCategory">
                 </div>
 
@@ -369,12 +369,14 @@
                 }
             });
 
+            // --- แก้ไขตรงนี้เพื่อแสดงข้อมูลทั้งหมดต่อเนื่อง ไม่ตัดตามเดือน ---
             const today = new Date();
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
             
-            document.getElementById('filterStartDate').value = formatDateInput(firstDay);
-            document.getElementById('filterEndDate').value = formatDateInput(lastDay);
+            // ปล่อยว่างไว้เพื่อแสดงรายการทั้งหมด (All Time)
+            document.getElementById('filterStartDate').value = ''; 
+            document.getElementById('filterEndDate').value = '';
+            
+            // ตั้งค่าวันที่สำหรับบันทึกรายการใหม่เป็นวันนี้เสมอ
             document.getElementById('txDate').value = formatDateInput(today);
         }
 
